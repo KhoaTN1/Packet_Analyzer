@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Packet Analyser - Dark Mode</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <div class="container">
+    <h1>🛰️ Packet Analyser</h1>
+    <div class="buttons">
+      <button onclick="startCapture()">Start</button>
+      <button onclick="stopCapture()">Stop</button>
+    </div>
+
+    <div class="stats">
+      <canvas id="trafficChart" width="400" height="200"></canvas>
+    </div>
+    
+    <!-- Search box (just the box to type in) -->
+    <input type="text" id="packetFilter" placeholder="Filter by IP, protocol, summary..." style="width: 300px; padding: 6px; margin: 10px 0;">
+
+    <table id="packetTable">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Source</th>
+          <th>Destination</th>
+          <th>Protocol</th>
+          <th>Summary</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <script>
+    let chart;
+
+    function updatePackets() {
+      fetch('/packets')
+        .then(res => res.json())
+        .then(data => {
+        const table = document.querySelector('#packetTable tbody');
+          table.innerHTML = data.reverse().map(pkt => `<tr>
+          <td>${((pkt.id - 1) % 100) + 1}</td>
+          <td>${pkt.src}</td>
+          <td>${pkt.dst}</td>
+          <td>${pkt.proto}</td>
+          <td>${pkt.summary}</td>
+          </tr>`).join('');
+          applyFilter();   
+        });
+    }
+
+    function updateChart() {
+      fetch('/stats')
+        .then(res => res.json())
+        .then(stats => {
+          chart.data.datasets[0].data = [
+            stats.TCP,
+            stats.UDP,
+            stats.ICMP,
+            stats.Other
+          ];
+          chart.update();
+        });
+    }
+
+    function startCapture() {
+      fetch('/start');
+    }
+
+    function stopCapture() {
+      fetch('/stop');
+    }
+
+    setInterval(() => {
+      updatePackets();
+      updateChart();
+    }, 1500);
+
+    window.onload = function () {
+      const ctx = document.getElementById('trafficChart');
+      chart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: ['TCP', 'UDP', 'ICMP', 'Other'],
+          datasets: [{
+            data: [0, 0, 0, 0],
+            backgroundColor: ['#007bff', '#28a745', '#ffc107', '#dc3545']
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { labels: { color: '#fff' } }
+          }
+        }
+      });
+    };
+
+    <!-- Actual filtering from the search bar -->
+    function applyFilter() {
+    const terms = document.getElementById("packetFilter").value
+      .toLowerCase().split(/\s+/).filter(Boolean);
+    document.querySelectorAll("#packetTable tbody tr").forEach(row => {
+      const text = row.textContent.toLowerCase();
+      row.style.display = terms.every(t => text.includes(t)) ? "" : "none";
+    });
+    }
+
+document.getElementById("packetFilter").addEventListener("input", applyFilter);
+  </script>
+</body>
+</html>
